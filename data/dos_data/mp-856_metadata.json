@@ -1,0 +1,9 @@
+{
+  "mp_id": "mp-856",
+  "formula": "SnO2",
+  "band_gap": 0.6519,
+  "efermi": 5.52753935,
+  "dos_shape": [
+    2001
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "mp_id": "mp-2133",
+  "formula": "ZnO",
+  "band_gap": 0.7227,
+  "efermi": 0.82299037,
+  "dos_shape": [
+    2001
+  ]
+}

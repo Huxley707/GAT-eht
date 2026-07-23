@@ -1,0 +1,9 @@
+{
+  "mp_id": "mp-352",
+  "formula": "HfO2",
+  "band_gap": 4.0165,
+  "efermi": 3.04059473,
+  "dos_shape": [
+    2001
+  ]
+}

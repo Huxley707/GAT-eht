@@ -1,0 +1,9 @@
+{
+  "mp_id": "mp-559445",
+  "formula": "VO2",
+  "band_gap": 1.2536,
+  "efermi": -1.96095418,
+  "dos_shape": [
+    2001
+  ]
+}

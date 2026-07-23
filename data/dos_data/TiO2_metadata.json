@@ -1,0 +1,176 @@
+[
+  {
+    "mp_id": "mp-572822",
+    "formula": "TiO2",
+    "band_gap": 1.6966,
+    "efermi": -2.5034342
+  },
+  {
+    "mp_id": "mp-554278",
+    "formula": "TiO2",
+    "band_gap": 2.6774,
+    "efermi": 1.36468447
+  },
+  {
+    "mp_id": "mp-766454",
+    "formula": "TiO2",
+    "band_gap": 2.231,
+    "efermi": 2.3204769
+  },
+  {
+    "mp_id": "mp-2657",
+    "formula": "TiO2",
+    "band_gap": 1.780999999999999,
+    "efermi": 3.20287472
+  },
+  {
+    "mp_id": "mp-430",
+    "formula": "TiO2",
+    "band_gap": 2.2317,
+    "efermi": 3.94508355
+  },
+  {
+    "mp_id": "mp-390",
+    "formula": "TiO2",
+    "band_gap": 2.0586,
+    "efermi": 1.90345107
+  },
+  {
+    "mp_id": "mp-34688",
+    "formula": "TiO2",
+    "band_gap": 1.9546000000000001,
+    "efermi": 1.9631465
+  },
+  {
+    "mp_id": "mp-553432",
+    "formula": "TiO2",
+    "band_gap": 3.421,
+    "efermi": -1.82744155
+  },
+  {
+    "mp_id": "mp-1408285",
+    "formula": "TiO2",
+    "band_gap": 2.4461,
+    "efermi": 1.38109512
+  },
+  {
+    "mp_id": "mp-1426806",
+    "formula": "TiO2",
+    "band_gap": 2.6004,
+    "efermi": -1.85203013
+  },
+  {
+    "mp_id": "mp-25433",
+    "formula": "TiO2",
+    "band_gap": 2.4516,
+    "efermi": 1.06633637
+  },
+  {
+    "mp_id": "mp-756587",
+    "formula": "TiO2",
+    "band_gap": 2.3165,
+    "efermi": 1.84214176
+  },
+  {
+    "mp_id": "mp-1079207",
+    "formula": "TiO2",
+    "band_gap": 0.8879999999999991,
+    "efermi": 6.23422477
+  },
+  {
+    "mp_id": "mp-1445035",
+    "formula": "TiO2",
+    "band_gap": 0.0,
+    "efermi": -0.88748372
+  },
+  {
+    "mp_id": "mp-1102591",
+    "formula": "TiO2",
+    "band_gap": 1.149599999999999,
+    "efermi": 4.68737241
+  },
+  {
+    "mp_id": "mp-1008677",
+    "formula": "TiO2",
+    "band_gap": 1.056499999999999,
+    "efermi": 5.51383161
+  },
+  {
+    "mp_id": "mp-25262",
+    "formula": "TiO2",
+    "band_gap": 1.712,
+    "efermi": 0.9647505
+  },
+  {
+    "mp_id": "mp-636827",
+    "formula": "TiO2",
+    "band_gap": 2.7867,
+    "efermi": -3.93517429
+  },
+  {
+    "mp_id": "mp-1341203",
+    "formula": "TiO2",
+    "band_gap": 2.513699999999999,
+    "efermi": 0.23068294
+  },
+  {
+    "mp_id": "mp-1439",
+    "formula": "TiO2",
+    "band_gap": 2.5281000000000002,
+    "efermi": 3.04797952
+  },
+  {
+    "mp_id": "mp-1190753",
+    "formula": "TiO2",
+    "band_gap": 2.0744,
+    "efermi": 4.4270086
+  },
+  {
+    "mp_id": "mp-1840",
+    "formula": "TiO2",
+    "band_gap": 2.2862,
+    "efermi": 2.57728665
+  },
+  {
+    "mp_id": "mp-1102255",
+    "formula": "TiO2",
+    "band_gap": 1.7550999999999992,
+    "efermi": 5.7044401
+  },
+  {
+    "mp_id": "mp-754672",
+    "formula": "TiO2",
+    "band_gap": 2.9809,
+    "efermi": -0.28495587
+  },
+  {
+    "mp_id": "mp-9173",
+    "formula": "TiO2",
+    "band_gap": 2.4757,
+    "efermi": 1.78752556
+  },
+  {
+    "mp_id": "mp-1386640",
+    "formula": "TiO2",
+    "band_gap": 2.5135,
+    "efermi": 1.45651419
+  },
+  {
+    "mp_id": "mp-1041565",
+    "formula": "TiO2",
+    "band_gap": 1.82,
+    "efermi": 3.21621794
+  },
+  {
+    "mp_id": "mp-1350429",
+    "formula": "TiO2",
+    "band_gap": 1.0603,
+    "efermi": 1.840562
+  },
+  {
+    "mp_id": "mp-1400963",
+    "formula": "TiO2",
+    "band_gap": 2.502799999999999,
+    "efermi": 0.6297268
+  }
+]

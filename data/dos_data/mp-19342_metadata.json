@@ -1,0 +1,9 @@
+{
+  "mp_id": "mp-19342",
+  "formula": "WO3",
+  "band_gap": 1.3231,
+  "efermi": 0.34464233,
+  "dos_shape": [
+    2001
+  ]
+}
