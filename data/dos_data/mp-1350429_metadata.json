@@ -1,0 +1,12 @@
+{
+  "mp_id": "mp-1350429",
+  "formula": "TiO2",
+  "band_gap_mp": 1.0603199176882998,
+  "formation_energy_per_atom_mp": -3.3225052104861112,
+  "energy_above_hull_mp": 0.18555024145833343,
+  "is_stable_mp": false,
+  "cbm_mp": 2.894218785533971,
+  "vbm_mp": 1.8338988678456714,
+  "efermi_mp": 1.840562,
+  "has_band_edges_mp": true
+}

@@ -1,0 +1,12 @@
+{
+  "mp_id": "mp-1277117",
+  "formula": "VO2",
+  "band_gap_mp": 1.0579999999999998,
+  "formation_energy_per_atom_mp": -2.412627525,
+  "energy_above_hull_mp": 0.10984065166665147,
+  "is_stable_mp": false,
+  "cbm_mp": 3.0587,
+  "vbm_mp": 2.0007,
+  "efermi_mp": 3.05857719,
+  "has_band_edges_mp": true
+}

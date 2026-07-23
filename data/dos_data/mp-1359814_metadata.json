@@ -1,0 +1,12 @@
+{
+  "mp_id": "mp-1359814",
+  "formula": "SnO2",
+  "band_gap_mp": 0.0,
+  "formation_energy_per_atom_mp": -1.850922564166666,
+  "energy_above_hull_mp": 0.2565594408333336,
+  "is_stable_mp": false,
+  "cbm_mp": null,
+  "vbm_mp": null,
+  "efermi_mp": 4.05914498,
+  "has_band_edges_mp": false
+}

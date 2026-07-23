@@ -1,0 +1,12 @@
+{
+  "mp_id": "mp-1245109",
+  "formula": "ZnO",
+  "band_gap_mp": 1.2176,
+  "formation_energy_per_atom_mp": -1.543852975125,
+  "energy_above_hull_mp": 0.24704613737499947,
+  "is_stable_mp": false,
+  "cbm_mp": 1.8226,
+  "vbm_mp": 0.605,
+  "efermi_mp": 0.60503965,
+  "has_band_edges_mp": true
+}

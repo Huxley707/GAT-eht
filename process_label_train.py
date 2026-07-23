@@ -1,7 +1,7 @@
 """
 光催化性能预测完整特征工程流水线
 适用于GAT网络训练，支持多任务学习和可解释性输出
-修正版本 - 与basics_feature_extractor.py完美对应
+修正版本 - 与特征工程输出完全对应（仅包含准确计算的特征）
 """
 
 import joblib
@@ -57,16 +57,16 @@ class PhotocatalysisData(Data):
 # ==================== GAT模型定义 ====================
 
 class PhotocatalysisGAT(nn.Module):
-    def __init__(self, node_in_dim=12, edge_in_dim=9, global_in_dim=32,
-                 hidden_dim=64, num_heads=4, output_dim=9):
+    def __init__(self, node_in_dim=12, edge_in_dim=8, global_in_dim=32,
+                 hidden_dim=64, num_heads=4, output_dim=3):
         """
         参数:
             node_in_dim: 节点特征维度 (来自特征工程: 12)
-            edge_in_dim: 边特征维度 (来自特征工程: 9)
+            edge_in_dim: 边特征维度 (来自特征工程: 8，移除了键级估计)
             global_in_dim: 全局特征维度 (来自特征工程: 动态确定)
             hidden_dim: 隐藏层维度
             num_heads: 注意力头数
-            output_dim: 输出维度 (对应9个目标特征)
+            output_dim: 输出维度 (对应3个准确计算的目标特征)
         """
         super().__init__()
 
@@ -253,44 +253,32 @@ class PhotocatalysisLabelProcessor:
     """
     光催化性能标签处理器
     处理多任务学习中的标签
-    与basics_feature_extractor.py中的9个目标特征完全对应
+    与特征工程中的3个准确计算目标特征完全对应
     """
 
-    # 任务名称到列的映射 - 完全匹配特征工程中的列名
+    # 任务名称到列的映射 - 只保留准确计算的特征
     TASK_COLUMNS = {
         # 核心性能指标 - 对应targets.csv中的列名
-        'band_gap_pred': 'band_gap_pred',  # 带隙
-        'surface_energy_pred': 'surface_energy_pred',  # 表面能
-        'active_site_pred': 'active_site_pred',  # 活性位点密度
-        'vacancy_energy_pred': 'vacancy_energy_pred',  # 氧空位形成能
-        'distortion_pred': 'distortion_pred',  # 结构畸变
-        'ionization_energy': 'ionization_energy',  # 电离能
-        'polarizability': 'polarizability',  # 极化率
-        'formation_energy': 'formation_energy',  # 形成能
-        'bulk_modulus': 'bulk_modulus'  # 体积模量
+        'band_gap_pred': 'band_gap_pred',  # 带隙 (MEGNet预测)
+        'distortion_pred': 'distortion_pred',  # 结构畸变 (q6参数)
+        'ionization_energy': 'ionization_energy',  # 电离能 (准确)
     }
 
-    # 任务权重（基于物理意义）- 与特征工程中的权重保持一致
+    # 任务权重（基于物理意义）
     TASK_WEIGHTS = {
         'band_gap_pred': 1.0,  # 带隙 - 最关键
-        'surface_energy_pred': 0.85,  # 表面能
-        'active_site_pred': 0.95,  # 活性位点密度 - 非常重要
-        'vacancy_energy_pred': 0.9,  # 氧空位形成能
         'distortion_pred': 0.7,  # 结构畸变
         'ionization_energy': 0.75,  # 电离能
-        'polarizability': 0.65,  # 极化率
-        'formation_energy': 0.8,  # 形成能
-        'bulk_modulus': 0.6  # 体积模量
     }
 
     def __init__(self, task_names=None):
         """
         初始化标签处理器
-        task_names: 要预测的任务列表，例如 ['band_gap_pred', 'surface_energy_pred']
-                    如果为None，则使用所有9个任务
+        task_names: 要预测的任务列表，例如 ['band_gap_pred', 'distortion_pred']
+                    如果为None，则使用所有3个任务
         """
         if task_names is None:
-            # 默认使用所有9个任务
+            # 默认使用所有3个任务
             self.task_names = list(self.TASK_COLUMNS.keys())
         else:
             self.task_names = task_names
@@ -464,24 +452,18 @@ class PhotocatalysisInterpreter:
     """
     光催化性能预测的可解释性输出
     将模型输出转换为材料科学建议
-    更新以匹配9个目标特征
+    更新以匹配3个准确计算的目标特征
     """
 
     def __init__(self, label_processor):
         self.label_processor = label_processor
         self.stats = label_processor.stats if hasattr(label_processor, 'stats') else {}
 
-        # 参考值 - 更新以匹配9个目标特征
+        # 参考值 - 更新以匹配3个准确计算的目标特征
         self.reference_values = {
             'band_gap_pred': {'ideal': [1.8, 2.5], 'unit': 'eV', 'name': '带隙'},
-            'surface_energy_pred': {'ideal': [0.5, 2.0], 'unit': 'J/m²', 'name': '表面能'},
-            'active_site_pred': {'ideal': [0.1, 0.5], 'unit': 'sites/Å²', 'name': '活性位点密度'},
-            'vacancy_energy_pred': {'ideal': [1.0, 3.0], 'unit': 'eV', 'name': '氧空位形成能'},
             'distortion_pred': {'ideal': [0.1, 0.3], 'unit': '', 'name': '结构畸变'},
-            'ionization_energy': {'ideal': [5, 10], 'unit': 'eV', 'name': '电离能'},
-            'polarizability': {'ideal': [10, 50], 'unit': 'a.u.', 'name': '极化率'},
-            'formation_energy': {'ideal': [-5, 0], 'unit': 'eV/atom', 'name': '形成能'},
-            'bulk_modulus': {'ideal': [50, 200], 'unit': 'GPa', 'name': '体积模量'}
+            'ionization_energy': {'ideal': [5, 10], 'unit': 'eV', 'name': '电离能'}
         }
 
     def generate_report(self, predictions, structure_info=None):
@@ -524,18 +506,9 @@ class PhotocatalysisInterpreter:
         report.append("\n【电子结构特征】")
         self._add_metric(report, raw_predictions, 'band_gap_pred', '带隙')
         self._add_metric(report, raw_predictions, 'ionization_energy', '电离能')
-        self._add_metric(report, raw_predictions, 'polarizability', '极化率')
 
-        # 表面特征
-        report.append("\n【表面特征】")
-        self._add_metric(report, raw_predictions, 'surface_energy_pred', '表面能')
-        self._add_metric(report, raw_predictions, 'active_site_pred', '活性位点密度')
-        self._add_metric(report, raw_predictions, 'vacancy_energy_pred', '氧空位形成能')
-
-        # 热力学和结构特征
-        report.append("\n【热力学和结构特征】")
-        self._add_metric(report, raw_predictions, 'formation_energy', '形成能')
-        self._add_metric(report, raw_predictions, 'bulk_modulus', '体积模量')
+        # 结构特征
+        report.append("\n【结构特征】")
         self._add_metric(report, raw_predictions, 'distortion_pred', '结构畸变')
 
         # 性能限制因素分析
@@ -595,27 +568,21 @@ class PhotocatalysisInterpreter:
             elif bg < 1.5:
                 limitations.append("• 带隙过小 (<1.5 eV)，光生载流子易复合")
 
-        # 表面能分析
-        se = predictions.get('surface_energy_pred')
-        if se:
-            if se > 2.0:
-                limitations.append("• 表面能过高，材料稳定性差")
-            elif se < 0.5:
-                limitations.append("• 表面能过低，表面反应活性不足")
+        # 结构畸变分析
+        dist = predictions.get('distortion_pred')
+        if dist:
+            if dist > 0.5:
+                limitations.append("• 结构畸变较大，可能影响载流子迁移率")
+            elif dist < 0.05:
+                limitations.append("• 结构过于规整，可能缺乏活性位点")
 
-        # 活性位点密度分析
-        asd = predictions.get('active_site_pred')
-        if asd:
-            if asd < 0.1:
-                limitations.append("• 活性位点密度低，反应速率受限")
-
-        # 氧空位形成能分析
-        ov = predictions.get('vacancy_energy_pred')
-        if ov:
-            if ov > 3.0:
-                limitations.append("• 氧空位形成能过高，缺陷浓度低")
-            elif ov < 1.0:
-                limitations.append("• 氧空位形成能过低，材料易失氧")
+        # 电离能分析
+        ie = predictions.get('ionization_energy')
+        if ie:
+            if ie > 12:
+                limitations.append("• 电离能过高，光生电子注入效率可能较低")
+            elif ie < 5:
+                limitations.append("• 电离能过低，材料可能不稳定")
 
         if not limitations:
             limitations.append("• 未检测到明显性能限制因素")
@@ -635,27 +602,17 @@ class PhotocatalysisInterpreter:
             elif bg < 1.5:
                 suggestions.append("• 考虑掺杂金属离子引入中间能级，抑制复合")
 
-        # 基于表面能的建议
-        se = predictions.get('surface_energy_pred')
-        if se and se > 2.0:
-            suggestions.append("• 通过表面钝化降低表面能，提高稳定性")
+        # 基于结构畸变的建议
+        dist = predictions.get('distortion_pred')
+        if dist and dist > 0.5:
+            suggestions.append("• 考虑通过元素掺杂稳定晶体结构")
+        elif dist and dist < 0.05:
+            suggestions.append("• 考虑引入缺陷工程增加结构活性")
 
-        # 基于活性位点密度的建议
-        asd = predictions.get('active_site_pred')
-        if asd and asd < 0.1:
-            suggestions.append("• 通过纳米化或暴露高活性晶面增加活性位点密度")
-
-        # 基于氧空位形成能的建议
-        ov = predictions.get('vacancy_energy_pred')
-        if ov and ov > 3.0:
-            suggestions.append("• 考虑掺杂低价态元素促进氧空位形成")
-        elif ov and ov < 1.0:
-            suggestions.append("• 通过氧化处理提高氧空位稳定性")
-
-        # 基于形成能的建议
-        fe = predictions.get('formation_energy')
-        if fe and fe > 0:
-            suggestions.append("• 形成能为正，材料热力学不稳定，需优化合成条件")
+        # 基于电离能的建议
+        ie = predictions.get('ionization_energy')
+        if ie and ie > 12:
+            suggestions.append("• 考虑表面修饰降低电离能，改善界面电荷注入")
 
         if not suggestions:
             suggestions.append("• 当前性能良好，可考虑进一步提高比表面积和结晶度")
@@ -854,63 +811,48 @@ class PhotocatalysisTrainer:
             return torch.tensor(0.0, device=self.device, requires_grad=True)
 
     def _compute_constraint_loss(self, predictions, batch):
-        """计算物理约束损失 - 增强版"""
+        """计算物理约束损失 - 简化版"""
         constraint_loss = 0
         task_names = self.label_processor.task_names
 
         # 创建任务索引映射
         task_indices = {name: i for i, name in enumerate(task_names)}
 
-        # 1. 带隙与形成能的相关性约束（物理合理的带隙通常与形成能相关）
-        if ('band_gap_pred' in task_indices and 'formation_energy' in task_indices):
+        # 1. 带隙与电离能的相关性约束（物理合理的带隙通常与电离能相关）
+        if ('band_gap_pred' in task_indices and 'ionization_energy' in task_indices):
             bg_idx = task_indices['band_gap_pred']
-            fe_idx = task_indices['formation_energy']
+            ie_idx = task_indices['ionization_energy']
 
             # 提取预测值
             bg_pred = predictions[:, bg_idx]
-            fe_pred = predictions[:, fe_idx]
+            ie_pred = predictions[:, ie_idx]
 
-            # 物理约束：带隙通常随形成能绝对值增大而增大（简化模型）
-            # 这里使用一个非常宽松的约束，只惩罚极端不合理的组合
-            # 例如：带隙很大但形成能为正（不稳定）
-            fe_abs = torch.abs(fe_pred)
-            unreasonable = (bg_pred > 3.0) & (fe_pred > 0)  # 大带隙但形成能为正（不稳定）
-            constraint_loss += 0.01 * torch.mean(unreasonable.float() * bg_pred)
-
-        # 2. 表面能与体积模量的关系（表面能通常与体积模量正相关）
-        if ('surface_energy_pred' in task_indices and 'bulk_modulus' in task_indices):
-            se_idx = task_indices['surface_energy_pred']
-            bm_idx = task_indices['bulk_modulus']
-
-            se_pred = predictions[:, se_idx]
-            bm_pred = predictions[:, bm_idx]
-
-            # 归一化后应该有正相关性
+            # 物理约束：带隙通常与电离能正相关（简化模型）
             # 这里使用一个非常宽松的约束
-            se_norm = (se_pred - se_pred.mean()) / (se_pred.std() + 1e-8)
-            bm_norm = (bm_pred - bm_pred.mean()) / (bm_pred.std() + 1e-8)
+            bg_norm = (bg_pred - bg_pred.mean()) / (bg_pred.std() + 1e-8)
+            ie_norm = (ie_pred - ie_pred.mean()) / (ie_pred.std() + 1e-8)
 
             # 惩罚负相关（如果相关系数太负）
-            correlation = (se_norm * bm_norm).mean()
-            constraint_loss += 0.005 * torch.relu(-correlation - 0.5)  # 只有当相关性太负时才惩罚
-
-        # 3. 活性位点密度与表面能的关系（通常正相关）
-        if ('active_site_pred' in task_indices and 'surface_energy_pred' in task_indices):
-            as_idx = task_indices['active_site_pred']
-            se_idx = task_indices['surface_energy_pred']
-
-            as_pred = predictions[:, as_idx]
-            se_pred = predictions[:, se_idx]
-
-            # 归一化
-            as_norm = (as_pred - as_pred.mean()) / (as_pred.std() + 1e-8)
-            se_norm = (se_pred - se_pred.mean()) / (se_pred.std() + 1e-8)
-
-            # 惩罚负相关
-            correlation = (as_norm * se_norm).mean()
+            correlation = (bg_norm * ie_norm).mean()
             constraint_loss += 0.005 * torch.relu(-correlation - 0.5)
 
+        # 2. 带隙与结构畸变的关系（通常结构畸变影响带隙）
+        if ('band_gap_pred' in task_indices and 'distortion_pred' in task_indices):
+            bg_idx = task_indices['band_gap_pred']
+            dist_idx = task_indices['distortion_pred']
+
+            bg_pred = predictions[:, bg_idx]
+            dist_pred = predictions[:, dist_idx]
+
+            # 结构畸变过大通常导致带隙变化（正负都可能，但不应极端）
+            # 这里惩罚极端畸变与极端带隙的组合
+            extreme_dist = torch.abs(dist_pred) > 0.8
+            extreme_bg = (bg_pred > 3.0) | (bg_pred < 1.0)
+            unreasonable = extreme_dist & extreme_bg
+            constraint_loss += 0.01 * torch.mean(unreasonable.float() * torch.abs(bg_pred - 2.0))
+
         return constraint_loss
+
     def evaluate(self, loader, task_weights=None):
         """评估模型"""
         if task_weights is None:
@@ -1019,29 +961,25 @@ class PhotocatalysisPipeline:
     """
     光催化性能预测完整流水线
     整合数据处理、模型训练、可解释性输出
-    与basics_feature_extractor.py的输出完全对应
+    与特征工程的准确特征输出完全对应
+    所有输出保存到 runs/ 目录
     """
 
-    def __init__(self, task_names=None, megnet_model_path=None, device=None):
+    def __init__(self, task_names=None, megnet_model_path=None, device=None, run_name=None):
         """
         初始化流水线
 
         参数:
-            task_names: 要预测的任务列表，默认为None（使用所有9个任务）
+            task_names: 要预测的任务列表，默认为None（使用所有3个任务）
             megnet_model_path: MEGNet模型路径（可选）
             device: 计算设备 ('cuda' 或 'cpu')
+            run_name: 运行名称，用于创建 runs/ 下的子目录
         """
-        # 默认使用所有9个任务
+        # 默认使用3个准确计算的任务
         default_tasks = [
             'band_gap_pred',
-            'surface_energy_pred',
-            'active_site_pred',
-            'vacancy_energy_pred',
             'distortion_pred',
-            'ionization_energy',
-            'polarizability',
-            'formation_energy',
-            'bulk_modulus'
+            'ionization_energy'
         ]
         self.task_names = task_names or default_tasks
         self.megnet_model_path = megnet_model_path
@@ -1059,10 +997,16 @@ class PhotocatalysisPipeline:
         else:
             self.device = torch.device(device)
 
-        # 特征维度（与特征工程一致）
+        # 特征维度（与特征工程一致 - 已移除经验公式）
         self.node_dim = 12
-        self.edge_dim = 9
+        self.edge_dim = 8  # 移除了键级估计
         self.global_dim = None  # 将在加载数据时确定
+
+        # 设置运行目录
+        self.run_name = run_name or datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.output_dir = os.path.join("runs", self.run_name)
+        os.makedirs(self.output_dir, exist_ok=True)
+        print(f"📁 运行目录: {self.output_dir}")
 
     def load_data(self, graph_data_path, targets_path=None):
         """
@@ -1078,7 +1022,12 @@ class PhotocatalysisPipeline:
 
         # 1. 加载图数据
         if not os.path.exists(graph_data_path):
-            raise FileNotFoundError(f"图数据文件不存在: {graph_data_path}")
+            # 尝试从features目录加载
+            alt_path = os.path.join("features", os.path.basename(graph_data_path))
+            if os.path.exists(alt_path):
+                graph_data_path = alt_path
+            else:
+                raise FileNotFoundError(f"图数据文件不存在: {graph_data_path}")
 
         self.graph_data_list = torch.load(graph_data_path)
         print(f"✅ 已加载图数据: {len(self.graph_data_list)} 个")
@@ -1150,7 +1099,7 @@ class PhotocatalysisPipeline:
             filename = row['filename']
             if filename in filename_to_idx:
                 idx = filename_to_idx[filename]
-                # 创建9维目标向量
+                # 创建3维目标向量
                 target_vector = []
                 for task in self.task_names:
                     if task in row and pd.notna(row[task]):
@@ -1409,8 +1358,18 @@ class PhotocatalysisPipeline:
 
         return reports
 
-    def save(self, model_path, pipeline_path):
-        """保存整个流水线"""
+    def save(self, model_path=None, pipeline_path=None):
+        """保存整个流水线到 runs/ 目录"""
+        # 设置默认路径
+        if model_path is None:
+            model_path = os.path.join(self.output_dir, 'gat_model.pt')
+        if pipeline_path is None:
+            pipeline_path = os.path.join(self.output_dir, 'pipeline.pt')
+
+        # 确保目录存在
+        os.makedirs(os.path.dirname(model_path), exist_ok=True)
+        os.makedirs(os.path.dirname(pipeline_path), exist_ok=True)
+
         if self.trainer:
             self.trainer.save_model(model_path)
 
@@ -1420,7 +1379,9 @@ class PhotocatalysisPipeline:
             'edge_dim': self.edge_dim,
             'global_dim': self.global_dim,
             'label_processor': self.label_processor,
-            'device': str(self.device)
+            'device': str(self.device),
+            'run_name': self.run_name,
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
 
         torch.save(pipeline_data, pipeline_path)
@@ -1434,6 +1395,7 @@ class PhotocatalysisPipeline:
         self.edge_dim = pipeline_data['edge_dim']
         self.global_dim = pipeline_data['global_dim']
         self.label_processor = pipeline_data['label_processor']
+        self.run_name = pipeline_data.get('run_name', self.run_name)
 
         self.build_model()
         self.trainer = PhotocatalysisTrainer(
@@ -1449,7 +1411,7 @@ class PhotocatalysisPipeline:
 
 # ==================== 主程序示例 ====================
 
-def plot_training_history(history):
+def plot_training_history(history, save_dir):
     """绘制训练历史曲线"""
     if not history or 'train_loss' not in history or not history['train_loss']:
         print("⚠️ 没有训练历史数据可绘制")
@@ -1481,8 +1443,11 @@ def plot_training_history(history):
     plt.grid(True)
 
     plt.tight_layout()
-    plt.savefig('training_curves.png')
-    print("📈 训练曲线图已保存为 'training_curves.png'")
+
+    # 保存到 runs/ 目录
+    save_path = os.path.join(save_dir, 'training_curves.png')
+    plt.savefig(save_path)
+    print(f"📈 训练曲线图已保存为 '{save_path}'")
     plt.show()
 
 
@@ -1490,31 +1455,30 @@ def main():
     """主程序示例 - 与特征工程输出完美对应"""
     print("=" * 70)
     print("光催化性能预测GAT模型训练流水线")
-    print("(与basics_feature_extractor.py输出完全对应)")
+    print("(与特征工程准确特征输出完全对应)")
     print("=" * 70)
 
-    # 文件路径配置 - 与特征工程输出一致
+    # 生成运行名称
+    run_name = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = os.path.join("runs", run_name)
+    os.makedirs(output_dir, exist_ok=True)
+
+    # 文件路径配置
     config = {
-        # 输入文件
-        'graph_data_path': 'photocatalysis_graph.pt',  # 图数据文件
-        'targets_path': 'photocatalysis_targets.csv',  # 目标值文件
-        'features_path': 'photocatalysis_features.csv',  # 特征文件（可选）
+        # 输入文件 (从features/目录读取)
+        'graph_data_path': os.path.join("features", 'photocatalysis_graph.pt'),
+        'targets_path': os.path.join("features", 'photocatalysis_targets.csv'),
+        'features_path': os.path.join("features", 'photocatalysis_features.csv'),
 
-        # 输出文件
-        'model_save_path': 'gat_model.pt',
-        'pipeline_save_path': 'pipeline.pt',
+        # 输出文件 (保存到runs/目录)
+        'model_save_path': os.path.join(output_dir, 'gat_model.pt'),
+        'pipeline_save_path': os.path.join(output_dir, 'pipeline.pt'),
 
-        # 要预测的任务 - 9个目标特征
+        # 要预测的任务 - 3个准确计算的目标特征
         'task_names': [
-            'band_gap_pred',  # 带隙
-            'surface_energy_pred',  # 表面能
-            'active_site_pred',  # 活性位点密度
-            'vacancy_energy_pred',  # 氧空位形成能
-            'distortion_pred',  # 结构畸变
-            'ionization_energy',  # 电离能
-            'polarizability',  # 极化率
-            'formation_energy',  # 形成能
-            'bulk_modulus'  # 体积模量
+            'band_gap_pred',      # 带隙 (MEGNet预测)
+            'distortion_pred',    # 结构畸变 (q6参数)
+            'ionization_energy',  # 电离能 (准确)
         ],
 
         # 模型参数
@@ -1531,21 +1495,27 @@ def main():
         'test_split': 0.15,
 
         # 设备
-        'device': 'cpu'  # 如果没有GPU，使用CPU
+        'device': 'cpu',  # 如果没有GPU，使用CPU
+
+        # 运行名称
+        'run_name': run_name
     }
+
+    print(f"\n📁 运行目录: {output_dir}")
 
     try:
         # 检查文件是否存在
         if not os.path.exists(config['graph_data_path']):
             print(f"❌ 错误: 图数据文件 '{config['graph_data_path']}' 不存在")
-            print("请先运行 basics_feature_extractor.py 生成数据文件")
+            print("请先运行特征工程脚本生成数据文件")
             return
 
         # 1. 初始化流水线
         pipeline = PhotocatalysisPipeline(
             task_names=config['task_names'],
             megnet_model_path=None,
-            device=config['device']
+            device=config['device'],
+            run_name=config['run_name']
         )
 
         # 2. 加载数据
@@ -1586,7 +1556,7 @@ def main():
 
         # 7. 绘制训练曲线
         if history:
-            plot_training_history(history)
+            plot_training_history(history, output_dir)
 
         # 8. 评估模型
         pipeline.evaluate(test_loader)
@@ -1619,6 +1589,7 @@ def main():
                 print(reports[0])
 
         print("\n✅ 训练完成！")
+        print(f"📁 所有输出文件保存在: {output_dir}/")
 
     except Exception as e:
         print(f"\n❌ 错误: {e}")

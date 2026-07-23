@@ -1,0 +1,12 @@
+{
+  "mp_id": "mp-1188454",
+  "formula": "PbO2",
+  "band_gap_mp": 0.038000000000000256,
+  "formation_energy_per_atom_mp": -0.5694930333333327,
+  "energy_above_hull_mp": 0.7301539983333329,
+  "is_stable_mp": false,
+  "cbm_mp": 3.4336,
+  "vbm_mp": 3.3956,
+  "efermi_mp": 3.39566804,
+  "has_band_edges_mp": true
+}

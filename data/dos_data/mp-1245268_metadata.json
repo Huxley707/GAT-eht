@@ -1,0 +1,12 @@
+{
+  "mp_id": "mp-1245268",
+  "formula": "WO3",
+  "band_gap_mp": 0.34159999999999996,
+  "formation_energy_per_atom_mp": -1.9444191992500008,
+  "energy_above_hull_mp": 0.2464414073124992,
+  "is_stable_mp": false,
+  "cbm_mp": -0.4439,
+  "vbm_mp": -0.7855,
+  "efermi_mp": -0.63966785,
+  "has_band_edges_mp": true
+}

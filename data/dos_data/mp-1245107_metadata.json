@@ -1,0 +1,12 @@
+{
+  "mp_id": "mp-1245107",
+  "formula": "HfO2",
+  "band_gap_mp": 3.7499000000000002,
+  "formation_energy_per_atom_mp": -3.792694125784312,
+  "energy_above_hull_mp": 0.2271169150490202,
+  "is_stable_mp": false,
+  "cbm_mp": 5.897,
+  "vbm_mp": 2.1471,
+  "efermi_mp": 2.19733388,
+  "has_band_edges_mp": true
+}

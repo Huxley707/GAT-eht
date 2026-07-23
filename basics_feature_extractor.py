@@ -1,6 +1,6 @@
 """
 增强型特征提取器 - 面向光催化性能预测的图数据特征工程
-支持节点特征、边特征、全局特征的提取和加权
+支持节点特征、边特征、全局特征的提取
 """
 import joblib
 import numpy as np
@@ -404,17 +404,6 @@ class ElectronicExtractor(FeatureExtractorBase):
         else:
             features.update({'avg_ionization_energy': 0, 'min_ionization_energy': 0, 'max_ionization_energy': 0})
 
-        # 极化率估计
-        polarizabilities = []
-        for el in elements:
-            if el.atomic_radius:
-                polarizabilities.append(el.atomic_radius ** 3)
-            else:
-                polarizabilities.append(0)
-
-        features['avg_polarizability'] = np.mean(polarizabilities)
-        features['total_polarizability'] = np.sum(polarizabilities)
-
         # d电子特征
         d_electrons_list = []
         for el in elements:
@@ -454,55 +443,9 @@ class ElectronicExtractor(FeatureExtractorBase):
                                                         features.get('band_gap_PBE', 0))
             except Exception as e:
                 print(f"      MEGNet预测整体失败: {e}")
-                # 回退到简化估计
-                if electroneg:
-                    x_range = max(electroneg) - min(electroneg)
-                    features['band_gap_est'] = 0.5 + 0.5 * x_range
-                else:
-                    features['band_gap_est'] = 1.0
+                features['band_gap_est'] = 0.0
         else:
-            # 使用简化估计
-            if electroneg:
-                x_range = max(electroneg) - min(electroneg)
-                features['band_gap_est'] = 0.5 + 0.5 * x_range
-            else:
-                features['band_gap_est'] = 1.0
-
-        # d带中心估计 - 使用之前定义的 electroneg
-        if np.sum(d_electrons_list) > 0 and electroneg:
-            d_atoms = [i for i, d in enumerate(d_electrons_list) if d > 0]
-            if d_atoms:
-                # 确保索引不超出 electroneg 的范围
-                valid_indices = [i for i in d_atoms if i < len(electroneg)]
-                if valid_indices:
-                    d_band_center = np.mean([electroneg[i] * d_electrons_list[i] for i in valid_indices])
-                    features['d_band_center_est'] = d_band_center
-
-                    # d带宽度
-                    d_electroneg_values = [electroneg[i] for i in valid_indices]
-                    features['d_band_width_est'] = np.std(d_electroneg_values) if len(d_electroneg_values) > 1 else 0
-                else:
-                    features['d_band_center_est'] = 0
-                    features['d_band_width_est'] = 0
-            else:
-                features['d_band_center_est'] = 0
-                features['d_band_width_est'] = 0
-        else:
-            features['d_band_center_est'] = 0
-            features['d_band_width_est'] = 0
-
-        # 元素电负性加权
-        if electroneg:
-            try:
-                features['electroneg_product'] = np.prod(electroneg) / (10 ** (len(electroneg) - 1))
-                weights = [el.number for el in elements if el.X]  # 只对有电负性的元素加权
-                if weights:
-                    features['electroneg_weighted_avg'] = np.average(electroneg, weights=weights)
-                else:
-                    features['electroneg_weighted_avg'] = np.mean(electroneg)
-            except:
-                features['electroneg_product'] = 0
-                features['electroneg_weighted_avg'] = np.mean(electroneg) if electroneg else 0
+            features['band_gap_est'] = 0.0
 
         return features
 
@@ -529,191 +472,38 @@ class ThermodynamicExtractor(FeatureExtractorBase):
             features.update({'ewald_energy': 0, 'ewald_energy_per_atom': 0,
                              'ewald_real': 0, 'ewald_recip': 0})
 
-        # 形成能估计（基于元素参考态）
-        formation_energy_est = 0
-        elements = [site.specie for site in structure]
-
-        # 简化模型：基于电负性和原子半径
-        for el in elements:
-            if el.X and el.atomic_radius:
-                # 负值表示稳定
-                formation_energy_est -= el.X * el.atomic_radius * 0.1
-
-        features['formation_energy_est'] = formation_energy_est / len(elements)
-
-        # 内聚能估计
-        cohesive_energy_est = 0
-        for el in elements:
-            if el.atomic_mass:
-                cohesive_energy_est += el.atomic_mass * 0.01
-
-        features['cohesive_energy_est'] = cohesive_energy_est / len(elements)
-
         # 晶格能密度
         features['lattice_energy_density'] = features['ewald_energy'] / structure.volume if structure.volume > 0 else 0
 
-        # 体积模量估计（基于密度和Ewald能量）
-        if structure.density > 0 and features['ewald_energy_per_atom'] < 0:
-            features['bulk_modulus_est'] = abs(features['ewald_energy_per_atom']) * structure.density * 10
-        else:
-            features['bulk_modulus_est'] = 0
-
-        # 热膨胀系数估计（简化）
-        features['thermal_expansion_est'] = 1.0 / (features['bulk_modulus_est'] + 1e-8) * 1000
-
         return features
 
 
-class SurfaceExtractor(FeatureExtractorBase):
-    """表面特征提取器 - 用于表面/界面相关特征"""
+class EnhancedFeatureExtractor(FeatureExtractorBase):
+    """增强版特征提取器 - 只进行基础特征提取，不含经验公式、交互特征和表面特征"""
 
-    def __init__(self):
-        super().__init__("Surface")
+    def __init__(self, base_extractor, normalize=True):
+        super().__init__(base_extractor.name + "_enhanced")
+        self.base_extractor = base_extractor
+        self.normalize = normalize
+        self.scaler = StandardScaler() if normalize else None
 
     def _extract_impl(self, structure):
-        features = {}
+        """实现基类的抽象方法"""
+        # 基础特征提取
+        base_features = self.base_extractor._extract_impl(structure)
+        return base_features
 
-        # 注意：完整的表面计算需要专门的表面结构
-        # 这里提供基于体相结构的表面特性估计
-
-        # 表面能估计（基于配位数和键能）
-        elements = [site.specie for site in structure]
-
-        # 估计表面原子比例
-        features['estimated_surface_atoms_ratio'] = 2.0 / (structure.num_sites ** (1 / 3))
-
-        # 表面能估计
-        bond_energy_est = 0
-        for el in elements:
-            if el.X:
-                bond_energy_est += el.X * 10  # 粗略估计
-
-        features['surface_energy_est'] = bond_energy_est / len(elements) * features['estimated_surface_atoms_ratio']
-
-        # 活性位点密度估计（基于d电子和电负性）
-        d_electrons = 0
-        for el in elements:
-            if el.group and 3 <= el.group <= 12:
-                d_electrons += el.group - 2
-
-        features['active_site_density_est'] = d_electrons / structure.volume if structure.volume > 0 else 0
-
-        # 表面极性估计（基于电负性差异）
-        electroneg = [el.X for el in elements if el.X]
-        if electroneg:
-            features['surface_polarity_est'] = np.std(electroneg) * 10
-        else:
-            features['surface_polarity_est'] = 0
-
-        # 氧空位形成能估计（如果含氧）
-        if any(el.symbol == 'O' for el in elements):
-            # 基于平均电负性的简化估计
-            avg_x = np.mean([el.X for el in elements if el.X])
-            features['oxygen_vacancy_energy_est'] = 5.0 - avg_x * 2  # 经验公式
-        else:
-            features['oxygen_vacancy_energy_est'] = 0
-
-        # 表面粗糙度估计
-        coord_variation = 0
+    def extract_with_engineering(self, structure, cif_path="data/cif_files"):
+        """提取特征（兼容旧接口）"""
         try:
-            cnn = CrystalNN()
-            coords = []
-            for i in range(min(len(structure), 20)):
-                local_env = cnn.get_local_order_parameters(structure, i)
-                if local_env and 'CN' in local_env:
-                    coords.append(local_env['CN'])
-
-            if coords:
-                coord_variation = np.std(coords) / (np.mean(coords) + 1e-8)
-        except:
-            pass
-
-        features['surface_roughness_est'] = coord_variation
-
-        return features
-
-
-class PhotocatalysisWeighting:
-    """
-    光催化性能关键特征权重分配器
-    基于光催化机理：带隙、光吸收、载流子分离、表面反应活性
-    """
-
-    # 光催化关键特征权重映射
-    FEATURE_WEIGHTS = {
-        # 电子结构特征（权重最高）- 直接影响带隙和光吸收
-        'band_gap_est': 1.0,
-        'band_gap_HSE': 1.0,  # HSE方法最准确
-        'band_gap_PBE': 0.8,  # PBE方法低估带隙
-        'band_gap_SCAN': 0.9,  # SCAN方法较准确
-        'band_gap_GLLB-SC': 0.85,
-        'total_valence_electrons': 0.8,
-        'valence_electrons_per_atom': 0.85,
-        'avg_ionization_energy': 0.75,
-        'min_ionization_energy': 0.7,
-        'max_ionization_energy': 0.7,
-        'avg_polarizability': 0.65,
-        'total_polarizability': 0.6,
-        'd_band_center_est': 0.9,  # d带中心（对过渡金属重要）
-        'd_band_width_est': 0.85,
-        'has_d_electrons': 0.8,
-        'total_d_electrons': 0.85,
-        'avg_d_electrons': 0.85,
-
-        # 结构特征 - 影响能带结构和载流子迁移
-        'volume': 0.5,
-        'density': 0.4,
-        'volume_per_atom': 0.45,
-        'spacegroup': 0.3,
-        'crystal_system_code': 0.35,
-        'a': 0.3, 'b': 0.3, 'c': 0.3,
-        'alpha': 0.2, 'beta': 0.2, 'gamma': 0.2,
-        'lattice_anisotropy': 0.5,
-
-        # 成键特征 - 影响载流子迁移率
-        'avg_bond_length': 0.55,
-        'std_bond_length': 0.5,
-        'avg_coordination': 0.6,
-        'std_coordination': 0.5,
-        'min_coordination': 0.4,
-        'max_coordination': 0.4,
-        'bond_angle_distortion': 0.7,  # 键角畸变
-        'hetero_bond_ratio': 0.65,
-
-        # 热力学特征 - 影响稳定性
-        'ewald_energy': 0.5,
-        'ewald_energy_per_atom': 0.55,
-        'formation_energy_est': 0.8,  # 形成能估计
-        'cohesive_energy_est': 0.75,  # 内聚能估计
-        'lattice_energy_density': 0.6,
-
-        # 表面特征 - 直接影响光催化反应
-        'surface_energy_est': 0.85,
-        'active_site_density_est': 0.95,  # 活性位点密度
-        'oxygen_vacancy_energy_est': 0.9,  # 氧空位形成能
-        'surface_polarity_est': 0.7,
-        'surface_roughness_est': 0.65,
-        'estimated_surface_atoms_ratio': 0.6,
-
-        # 元素特征
-        'num_elements': 0.4,
-        'metal_ratio': 0.5,
-        'transition_metal_ratio': 0.7,
-        'avg_electroneg': 0.6,
-        'range_electroneg': 0.55,
-    }
-
-    @classmethod
-    def get_weight(cls, feature_name):
-        """获取特征权重，默认权重0.5"""
-        for key, weight in cls.FEATURE_WEIGHTS.items():
-            if key in feature_name:
-                return weight
-        return 0.5
-
-    @classmethod
-    def apply_weights(cls, features_dict):
-        return features_dict
+            features = self._extract_impl(structure)
+            self.success_count += 1
+            return features
+        except Exception as e:
+            self.fail_count += 1
+            file_name = os.path.basename(cif_path) if cif_path else "unknown"
+            self.failed_files.append(file_name)
+            return {}
 
 
 class GraphDataBuilder:
@@ -729,7 +519,7 @@ class GraphDataBuilder:
         self.cutoff = cutoff
         self.max_neighbors = max_neighbors
         self.node_feature_dim = 12  # 节点特征维度
-        self.edge_feature_dim = 9  # 边特征维度
+        self.edge_feature_dim = 8  # 边特征维度 (移除了键级估计)
         self.model_path = model_path
         self.megnet_model = None
         self.use_megnet = model_path is not None
@@ -816,7 +606,7 @@ class GraphDataBuilder:
             else:
                 features.append(0.0)
 
-            # 极化率估计
+            # 极化率估计 - 保留作为节点特征
             if element.atomic_radius:
                 features.append(float(element.atomic_radius ** 3))
             else:
@@ -843,7 +633,6 @@ class GraphDataBuilder:
         edge_features = []
 
         # 使用 get_all_neighbors 处理周期性边界条件 (PBC)
-        # 这比 KDTree 更适合晶体结构
         all_neighbors = structure.get_all_neighbors(self.cutoff)
 
         for i, neighbors in enumerate(all_neighbors):
@@ -861,7 +650,7 @@ class GraphDataBuilder:
         return np.array(edge_index).T, np.array(edge_features)
 
     def _get_edge_features(self, structure, i, j, distance):
-        """计算边特征"""
+        """计算边特征 - 移除经验公式特征"""
         site_i = structure[i]
         site_j = structure[j]
 
@@ -884,16 +673,13 @@ class GraphDataBuilder:
         features.append(1.0 if (self._is_transition_metal(site_i.specie) or self._is_transition_metal(
             site_j.specie)) else 0.0)  # 是否涉及过渡金属
 
-        # 键级估计（简化）
-        features.append(float(1.0 / (1 + abs(x_i - x_j))))  # 基于电负性差的键级估计
-
         return features
 
     def _extract_global_features(self, structure):
-        """提取全局图级别特征"""
+        """提取全局图级别特征 - 移除所有经验公式和表面特征"""
         global_features = []
 
-        # 基本结构特征（保持不变）
+        # 基本结构特征
         lattice = structure.lattice
         global_features.extend([
             float(lattice.a), float(lattice.b), float(lattice.c),
@@ -903,7 +689,7 @@ class GraphDataBuilder:
             float(structure.volume / structure.num_sites)
         ])
 
-        # 对称性（保持不变）
+        # 对称性
         try:
             spg_analyzer = SpacegroupAnalyzer(structure)
             global_features.append(float(spg_analyzer.get_space_group_number()))
@@ -916,7 +702,7 @@ class GraphDataBuilder:
         except:
             global_features.extend([0.0, 0.0])
 
-        # 统计特征（保持不变）
+        # 统计特征
         elements = set([site.specie.symbol for site in structure])
         global_features.append(float(len(elements)))
 
@@ -930,39 +716,11 @@ class GraphDataBuilder:
         else:
             global_features.extend([0.0, 0.0, 0.0])
 
-        # 光催化关键特征 - 增强版带隙估计
-        band_gap_results = self._estimate_band_gap_with_details(structure)
-
-        if isinstance(band_gap_results, dict):
-            # 如果是多方法预测结果
-            global_features.append(float(band_gap_results.get('band_gap_HSE', 0)))
-            global_features.append(float(band_gap_results.get('band_gap_PBE', 0)))
-            global_features.append(float(band_gap_results.get('band_gap_SCAN', 0)))
-        else:
-            # 如果是单一值
-            global_features.append(float(band_gap_results))
-            global_features.append(0.0)  # 占位
-            global_features.append(0.0)  # 占位
-
-        # 其他特征（保持不变）
-        d_band_center = self._estimate_d_band_center(structure)
-        global_features.append(float(d_band_center))
-
-        formation_energy = self._estimate_formation_energy(structure)
-        global_features.append(float(formation_energy))
-
-        tm_count = sum(1 for site in structure if self._is_transition_metal(site.specie))
-        global_features.append(float(tm_count / structure.num_sites))
-
-        return np.array(global_features, dtype=np.float32)
-
-    def _estimate_band_gap_with_details(self, structure):
-        """带细节的带隙估计，返回多方法预测结果"""
+        # 带隙特征 - 只使用MEGNet预测
         if self.use_megnet and self.megnet_model:
             try:
                 band_gaps = {}
                 methods = {0: "PBE", 1: "GLLB-SC", 2: "HSE", 3: "SCAN"}
-
                 for method_id, method_name in methods.items():
                     graph_attrs = torch.tensor([method_id])
                     bandgap = self.megnet_model.predict_structure(
@@ -971,27 +729,19 @@ class GraphDataBuilder:
                     )
                     band_gaps[f'band_gap_{method_name}'] = float(bandgap)
 
-                return band_gaps
+                global_features.append(float(band_gaps.get('band_gap_HSE', 0)))
+                global_features.append(float(band_gaps.get('band_gap_PBE', 0)))
+                global_features.append(float(band_gaps.get('band_gap_SCAN', 0)))
             except:
-                return self._estimate_band_gap_simple(structure)
+                global_features.extend([0.0, 0.0, 0.0])
         else:
-            return self._estimate_band_gap_simple(structure)
+            global_features.extend([0.0, 0.0, 0.0])
 
-    def _estimate_band_gap_simple(self, structure):
-        """简化的带隙估计（原始方法）"""
-        elements = [site.specie for site in structure]
-        electroneg = [el.X for el in elements if el.X]
+        # 过渡金属比例
+        tm_count = sum(1 for site in structure if self._is_transition_metal(site.specie))
+        global_features.append(float(tm_count / structure.num_sites))
 
-        if electroneg:
-            x_diff = max(electroneg) - min(electroneg)
-            estimated_gap = 0.5 + 0.5 * x_diff
-        else:
-            estimated_gap = 1.0
-
-        if self._get_spacegroup_number(structure) > 0:
-            estimated_gap *= 1.1
-
-        return estimated_gap
+        return np.array(global_features, dtype=np.float32)
 
     def _get_valence_electrons(self, element):
         """获取价电子数"""
@@ -1026,205 +776,6 @@ class GraphDataBuilder:
         except:
             return 0
 
-    def _estimate_band_gap(self, structure):
-        """估计带隙 - 使用MEGNet模型或简化模型"""
-
-        # 如果可用，使用MEGNet模型进行多保真度预测
-        if self.use_megnet and self.megnet_model:
-            try:
-                # 对不同计算方法进行预测
-                band_gaps = {}
-
-                # 多保真度预测：0:PBE, 1:GLLB-SC, 2:HSE, 3:SCAN
-                methods = {
-                    0: "PBE",
-                    1: "GLLB-SC",
-                    2: "HSE",
-                    3: "SCAN"
-                }
-
-                for method_id, method_name in methods.items():
-                    graph_attrs = torch.tensor([method_id])
-                    bandgap = self.megnet_model.predict_structure(
-                        structure=structure,
-                        state_attr=graph_attrs
-                    )
-                    band_gaps[f'band_gap_{method_name}'] = float(bandgap)
-
-                # 返回HSE作为主要带隙估计（最准确），如果可用
-                if 'band_gap_HSE' in band_gaps:
-                    return band_gaps['band_gap_HSE']
-                else:
-                    # 返回第一个可用的带隙
-                    return list(band_gaps.values())[0]
-
-            except Exception as e:
-                print(f"⚠️ MEGNet预测失败: {e}，使用简化估计")
-                # 回退到简化模型
-
-        # 简化模型（原始方法）
-        elements = [site.specie for site in structure]
-        electroneg = [el.X for el in elements if el.X]
-
-        if electroneg:
-            x_diff = max(electroneg) - min(electroneg)
-            estimated_gap = 0.5 + 0.5 * x_diff
-        else:
-            estimated_gap = 1.0
-
-        # 考虑晶体结构的影响
-        if self._get_spacegroup_number(structure) > 0:
-            estimated_gap *= 1.1
-
-        return estimated_gap
-
-    def _estimate_d_band_center(self, structure):
-        """估计d带中心"""
-        d_electron_total = 0
-        d_atom_count = 0
-
-        for site in structure:
-            d_electrons = self._get_d_electrons(site.specie)
-            if d_electrons > 0:
-                d_electron_total += d_electrons
-                d_atom_count += 1
-
-        if d_atom_count > 0:
-            return d_electron_total / d_atom_count
-        return 0
-
-    def _estimate_formation_energy(self, structure):
-        """估计形成能"""
-        # 简化的形成能估计
-        total_energy = 0
-        for site in structure:
-            # 基于原子序数的简单能量估计
-            total_energy += site.specie.number * 0.1
-
-        # 考虑晶格能
-        lattice_energy = structure.volume / structure.num_sites * 0.01
-
-        return -(total_energy + lattice_energy) / structure.num_sites
-
-
-class EnhancedFeatureExtractor(FeatureExtractorBase):
-    """增强版特征提取器 - 支持特征工程和加权"""
-
-    def __init__(self, base_extractor, apply_weighting=True, normalize=True):
-        super().__init__(base_extractor.name + "_enhanced")
-        self.base_extractor = base_extractor
-        self.apply_weighting = apply_weighting
-        self.normalize = normalize
-        self.scaler = StandardScaler() if normalize else None
-
-    def _extract_impl(self, structure):
-        """实现基类的抽象方法"""
-        # 基础特征提取
-        base_features = self.base_extractor._extract_impl(structure)
-
-        # 特征工程：创建交互特征
-        engineered = self._create_interaction_features(structure, base_features)
-        base_features.update(engineered)
-
-        # 特征工程：创建统计特征
-        stats_features = self._create_statistical_features(structure)
-        base_features.update(stats_features)
-
-        # 应用光催化权重
-        if self.apply_weighting:
-            base_features = PhotocatalysisWeighting.apply_weights(base_features)
-
-        return base_features
-
-    def extract_with_engineering(self, structure, cif_path="data/cif_files"):
-        """提取特征并应用特征工程（兼容旧接口）"""
-        try:
-            features = self._extract_impl(structure)
-            self.success_count += 1
-            return features
-        except Exception as e:
-            self.fail_count += 1
-            file_name = os.path.basename(cif_path) if cif_path else "unknown"
-            self.failed_files.append(file_name)
-            return {}
-
-    def _create_interaction_features(self, structure, base_features):
-        """创建特征交互项"""
-        features = {}
-
-        # 电负性与配位数交互
-        if 'avg_electroneg' in base_features and 'avg_coordination' in base_features:
-            features['electroneg_coord_product'] = base_features['avg_electroneg'] * base_features['avg_coordination']
-
-        # 体积与带隙交互
-        if 'volume' in base_features and 'band_gap_est' in base_features:
-            features['volume_bandgap_ratio'] = base_features['volume'] / (base_features['band_gap_est'] + 1e-8)
-
-        # 密度与形成能交互
-        if 'density' in base_features and 'formation_energy_est' in base_features:
-            features['density_formation_product'] = base_features['density'] * base_features['formation_energy_est']
-
-        # 键长与配位数交互
-        if 'avg_bond_length' in base_features and 'avg_coordination' in base_features:
-            features['bond_length_coord_ratio'] = base_features['avg_bond_length'] / (
-                    base_features['avg_coordination'] + 1e-8)
-
-        # 对称性与电负性范围交互
-        if 'spacegroup' in base_features and 'range_electroneg' in base_features:
-            features['symmetry_electroneg_product'] = base_features['spacegroup'] * base_features['range_electroneg']
-
-        # 过渡金属与d带中心交互
-        if 'transition_metal_ratio' in base_features and 'd_band_center_est' in base_features:
-            features['tm_dband_product'] = base_features['transition_metal_ratio'] * base_features['d_band_center_est']
-
-        # 体积与配位数交互
-        if 'volume_per_atom' in base_features and 'avg_coordination' in base_features:
-            features['volume_coord_ratio'] = base_features['volume_per_atom'] / (
-                    base_features['avg_coordination'] + 1e-8)
-
-        return features
-
-    def _create_statistical_features(self, structure):
-        """创建统计特征"""
-        features = {}
-
-        # 原子间距离分布统计
-        distances = []
-        for i in range(min(len(structure), 50)):  # 限制计算量
-            for j in range(i + 1, min(len(structure), 50)):
-                try:
-                    distances.append(structure.get_distance(i, j))
-                except:
-                    pass
-
-        if len(distances) > 1:
-            features['dist_skewness'] = float(skew(distances))
-            features['dist_kurtosis'] = float(kurtosis(distances))
-            features['dist_entropy'] = float(self._calculate_entropy(distances))
-        else:
-            features.update({'dist_skewness': 0, 'dist_kurtosis': 0, 'dist_entropy': 0})
-
-        # 元素分布熵
-        element_counts = defaultdict(int)
-        for site in structure:
-            element_counts[site.specie.symbol] += 1
-
-        probs = [count / len(structure) for count in element_counts.values()]
-        if probs:
-            features['element_entropy'] = float(-sum(p * np.log(p) for p in probs))
-        else:
-            features['element_entropy'] = 0
-
-        return features
-
-    def _calculate_entropy(self, data, bins=20):
-        """计算数据分布的熵"""
-        hist, _ = np.histogram(data, bins=bins, density=True)
-        hist = hist[hist > 0]
-        if len(hist) > 0:
-            return -sum(hist * np.log(hist))
-        return 0
-
 
 class PhotocatalysisData(Data):
     def __cat_dim__(self, key, value, *args, **kwargs):
@@ -1235,21 +786,16 @@ class PhotocatalysisData(Data):
 
 class PhotocatalysisFeaturePipeline:
     """
-    光催化性能预测完整特征工程流水线
-    支持设置多个目标特征作为y值
+    光催化性能预测特征工程流水线
+    只包含准确计算的特征，不含经验公式、交互特征和表面特征
+    所有输出统一保存到 features/ 目录
     """
 
-    # 您指定的9个目标特征
+    # 目标特征（只保留准确计算的）
     TARGET_FEATURES = {
-        'band_gap_pred': 'electronic_band_gap_HSE',  # 带隙
-        'surface_energy_pred': 'surface_surface_energy_est',  # 表面能
-        'active_site_pred': 'surface_active_site_density_est',  # 活性位点密度
-        'vacancy_energy_pred': 'surface_oxygen_vacancy_energy_est',  # 氧空位形成能
-        'distortion_pred': 'structural_distortion',  # 结构畸变
-        'ionization_energy': 'electronic_avg_ionization_energy',  # 电离能
-        'polarizability': 'electronic_avg_polarizability',  # 极化率
-        'formation_energy': 'thermodynamic_formation_energy_est',  # 形成能
-        'bulk_modulus': 'thermodynamic_bulk_modulus_est',  # 体积模量
+        'band_gap_pred': 'electronic_band_gap_HSE',  # 带隙 - MEGNet预测
+        'distortion_pred': 'structural_distortion',  # 结构畸变 - q6参数
+        'ionization_energy': 'electronic_avg_ionization_energy',  # 电离能 - 准确
     }
 
     def __init__(self, target_property='band_gap_pred', megnet_model_path=None, multi_target=True):
@@ -1257,7 +803,7 @@ class PhotocatalysisFeaturePipeline:
         参数:
             target_property: 主要目标属性名（在TARGET_FEATURES中）
             megnet_model_path: MEGNet模型路径
-            multi_target: 是否保存所有9个特征作为y值
+            multi_target: 是否保存所有目标特征作为y值
         """
         self.target_property = target_property
         self.multi_target = multi_target
@@ -1277,18 +823,22 @@ class PhotocatalysisFeaturePipeline:
         self.features_df = None
         self.targets_df = None
 
+        # 设置输出目录
+        self.output_dir = "features"
+        os.makedirs(self.output_dir, exist_ok=True)
+
         # 初始化提取器
         self._init_extractors()
 
     def _init_extractors(self):
-        """初始化所有特征提取器"""
+        """初始化所有特征提取器 - 移除SurfaceExtractor"""
         extractor_classes = [
             CompositionalExtractor,
             StructuralExtractor,
             BondingExtractor,
             ElectronicExtractor,
             ThermodynamicExtractor,
-            SurfaceExtractor
+            # SurfaceExtractor 已移除
         ]
 
         for ext_class in extractor_classes:
@@ -1296,18 +846,18 @@ class PhotocatalysisFeaturePipeline:
                 base_ext = ext_class(model_path=self.megnet_model_path)
             else:
                 base_ext = ext_class()
-            enhanced = EnhancedFeatureExtractor(base_ext, apply_weighting=True, normalize=True)
+            enhanced = EnhancedFeatureExtractor(base_ext, normalize=True)
             self.extractors.append(enhanced)
 
     def extract_target_values(self, features_dict):
         """
-        从特征字典中提取9个目标特征的值
+        从特征字典中提取目标特征的值
 
         参数:
             features_dict: 包含所有特征的字典（带前缀）
 
         返回:
-            target_dict: 9个目标特征的值
+            target_dict: 目标特征的值
         """
         target_dict = {}
 
@@ -1345,7 +895,7 @@ class PhotocatalysisFeaturePipeline:
         返回:
             final_data: 包含y值的图数据
             base_features: 所有特征字典
-            target_dict: 9个目标特征的值
+            target_dict: 目标特征的值
         """
         try:
             # 1. 加载结构
@@ -1432,7 +982,7 @@ class PhotocatalysisFeaturePipeline:
 
             # 设置y值 - 根据multi_target决定是单目标还是多目标
             if self.multi_target:
-                # 多目标：创建一个9维的y向量
+                # 多目标：创建一个多维的y向量
                 y_values = []
                 for target_name in self.TARGET_FEATURES.keys():
                     value = target_dict.get(target_name, float('nan'))
@@ -1441,7 +991,7 @@ class PhotocatalysisFeaturePipeline:
                         value = 0.0
                     y_values.append(float(value))
 
-                final_data.y = torch.tensor([y_values], dtype=torch.float)  # [1, 9]
+                final_data.y = torch.tensor([y_values], dtype=torch.float)
                 final_data.y_names = list(self.TARGET_FEATURES.keys())  # 保存y值名称
             else:
                 # 单目标：使用指定的target_property
@@ -1577,18 +1127,31 @@ class PhotocatalysisFeaturePipeline:
                 df[col].fillna(df[col].mean(), inplace=True)
         return df
 
-    def save_data(self, graph_path="graph_data.pt", features_path="features.csv", targets_path="targets.csv"):
+    def save_data(self, graph_path=None, features_path=None, targets_path=None):
         """
         保存所有数据到文件
 
         参数:
-            graph_path: 图数据保存路径 (.pt文件)
-            features_path: 特征DataFrame保存路径 (.csv文件)
-            targets_path: 目标值DataFrame保存路径 (.csv文件)
+            graph_path: 图数据保存路径 (.pt文件)，如果为None则使用默认路径
+            features_path: 特征DataFrame保存路径 (.csv文件)，如果为None则使用默认路径
+            targets_path: 目标值DataFrame保存路径 (.csv文件)，如果为None则使用默认路径
 
         返回:
             bool: 是否成功保存
         """
+        # 设置默认路径到 features/ 目录
+        if graph_path is None:
+            graph_path = os.path.join(self.output_dir, "photocatalysis_graph.pt")
+        if features_path is None:
+            features_path = os.path.join(self.output_dir, "photocatalysis_features.csv")
+        if targets_path is None:
+            targets_path = os.path.join(self.output_dir, "photocatalysis_targets.csv")
+
+        # 确保输出目录存在
+        os.makedirs(os.path.dirname(graph_path), exist_ok=True)
+        os.makedirs(os.path.dirname(features_path), exist_ok=True)
+        os.makedirs(os.path.dirname(targets_path), exist_ok=True)
+
         success = True
 
         # 1. 保存图数据
@@ -1642,20 +1205,13 @@ class PhotocatalysisFeaturePipeline:
             print("⚠️ 没有特征DataFrame可保存")
             success = False
 
-        # 3. 保存目标值DataFrame
+        # 3. 保存目标值DataFrame (只保存到文件，不再保存targets.csv)
         if self.targets_df is not None and not self.targets_df.empty:
             try:
                 self.targets_df.to_csv(targets_path, index=False)
                 print(f"✅ 目标值DataFrame已保存到: {targets_path}")
                 print(f"   - 样本数: {len(self.targets_df)}")
                 print(f"   - 目标变量数: {len([c for c in self.targets_df.columns if c != 'filename'])}")
-
-                # 保存目标值统计信息
-                stats_path = targets_path.replace('.csv', '_stats.csv')
-                stats_df = self.targets_df.describe()
-                stats_df.to_csv(stats_path)
-                print(f"✅ 目标值统计信息已保存到: {stats_path}")
-
             except Exception as e:
                 print(f"❌ 保存目标值DataFrame失败: {e}")
                 success = False
@@ -1700,7 +1256,7 @@ class PhotocatalysisFeaturePipeline:
 
         return success
 
-    def load_data(self, graph_path="graph_data.pt", features_path="features.csv", targets_path="targets.csv"):
+    def load_data(self, graph_path=None, features_path=None, targets_path=None):
         """
         从文件加载数据
 
@@ -1712,6 +1268,14 @@ class PhotocatalysisFeaturePipeline:
         返回:
             tuple: (graph_data_list, features_df, targets_df)
         """
+        # 设置默认路径到 features/ 目录
+        if graph_path is None:
+            graph_path = os.path.join(self.output_dir, "photocatalysis_graph.pt")
+        if features_path is None:
+            features_path = os.path.join(self.output_dir, "photocatalysis_features.csv")
+        if targets_path is None:
+            targets_path = os.path.join(self.output_dir, "photocatalysis_targets.csv")
+
         # 加载图数据
         if os.path.exists(graph_path):
             try:
@@ -1770,14 +1334,14 @@ def normalize_graph_data(graph_list):
 
 
 def main_with_targets():
-    """主程序：提取特征并设置9个目标值"""
+    """主程序：提取特征并设置目标值（仅包含准确计算的特征）"""
 
     print("=" * 70)
-    print("🚀 光催化性能预测特征工程流水线（多目标版）")
+    print("🚀 光催化性能预测特征工程流水线（准确特征版）")
     print("=" * 70)
 
     # 显示目标特征
-    print("\n🎯 目标特征（9个）:")
+    print("\n🎯 目标特征:")
     for name, feature in PhotocatalysisFeaturePipeline.TARGET_FEATURES.items():
         print(f"   {name:20} <- {feature}")
 
@@ -1786,12 +1350,16 @@ def main_with_targets():
     pipeline = PhotocatalysisFeaturePipeline(
         target_property='band_gap_pred',
         megnet_model_path=megnet_model_path,
-        multi_target=True  # 启用多目标模式
+        multi_target=True
     )
 
     # 设置输入输出路径
     input_folder = "data/cif_files/"
+
+    # 输出路径统一到 features/ 目录
     output_prefix = "photocatalysis"
+    output_dir = "features"
+    os.makedirs(output_dir, exist_ok=True)
 
     if not os.path.exists(input_folder):
         print(f"❌ 输入文件夹不存在: {input_folder}")
@@ -1800,47 +1368,27 @@ def main_with_targets():
         print("请将CIF文件放入该文件夹后重新运行")
         return
 
-    # 可选：从外部文件加载目标值
-    external_targets = None
-    target_file = os.path.join(input_folder, "targets.csv")
-    if os.path.exists(target_file):
-        try:
-            target_df = pd.read_csv(target_file)
-            # 期望格式：filename, band_gap_pred, surface_energy_pred, ...
-            external_targets = {}
-            for _, row in target_df.iterrows():
-                filename = row['filename']
-                targets = {}
-                for target_name in PhotocatalysisFeaturePipeline.TARGET_FEATURES.keys():
-                    if target_name in row and pd.notna(row[target_name]):
-                        targets[target_name] = row[target_name]
-                if targets:  # 只添加有目标值的文件
-                    external_targets[filename] = targets
-            print(f"✅ 已加载外部目标值，共 {len(external_targets)} 个文件")
-        except Exception as e:
-            print(f"⚠️ 目标文件加载失败: {e}")
-            print("将使用内部计算的特征作为目标值")
-
     # 批量处理
     print("\n📥 开始批量处理CIF文件...")
-    df, graph_data_list, targets_df = pipeline.batch_process(input_folder, external_targets)
+    df, graph_data_list, targets_df = pipeline.batch_process(input_folder)
 
     if len(df) == 0:
         print("❌ 没有成功处理的文件")
         return
 
-    # 保存结果
-    print("\n💾 正在保存结果...")
+    # 保存结果到 features/ 目录
+    print("\n💾 正在保存结果到 features/ 目录...")
     pipeline.save_data(
-        graph_path=f"{output_prefix}_graph.pt",
-        features_path=f"{output_prefix}_features.csv",
-        targets_path=f"{output_prefix}_targets.csv"
+        graph_path=os.path.join(output_dir, f"{output_prefix}_graph.pt"),
+        features_path=os.path.join(output_dir, f"{output_prefix}_features.csv"),
+        targets_path=os.path.join(output_dir, f"{output_prefix}_targets.csv")
     )
 
     # 输出统计信息
     print(f"\n📊 处理统计:")
     print(f"   - 成功处理文件数: {len(df)}")
     print(f"   - 特征维度: {df.shape[1] - 1} (不包括filename)")
+    print(f"   - 输出目录: {os.path.abspath(output_dir)}/")
 
     # 显示目标值统计
     print(f"\n📈 目标值统计:")
@@ -1854,10 +1402,15 @@ def main_with_targets():
             else:
                 print(f"   {target_name:20}: 无有效值")
 
+    # 列出输出文件
+    print(f"\n📁 输出文件列表:")
+    for file in os.listdir(output_dir):
+        if file.startswith(output_prefix):
+            print(f"   - {file} ({os.path.getsize(os.path.join(output_dir, file)) / 1024:.2f} KB)")
+
     return df, graph_data_list, targets_df
 
 
 if __name__ == "__main__":
-    # 运行多目标版本
+    # 运行准确特征版本
     df, graph_data, targets_df = main_with_targets()
-

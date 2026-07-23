@@ -5,5 +5,13 @@
   "efermi": 3.38291568,
   "dos_shape": [
     2001
-  ]
+  ],
+  "band_gap_mp": 4.227500000000001,
+  "formation_energy_per_atom_mp": -4.003427114583332,
+  "energy_above_hull_mp": 0.016383926250000513,
+  "is_stable_mp": false,
+  "cbm_mp": 7.6062,
+  "vbm_mp": 3.3787,
+  "efermi_mp": 3.43135929,
+  "has_band_edges_mp": true
 }

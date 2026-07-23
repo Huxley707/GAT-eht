@@ -1,0 +1,12 @@
+{
+  "mp_id": "mp-390",
+  "formula": "TiO2",
+  "band_gap_mp": 2.0629999999999997,
+  "formation_energy_per_atom_mp": -3.5080554519444447,
+  "energy_above_hull_mp": 0.0,
+  "is_stable_mp": true,
+  "cbm_mp": 3.9537,
+  "vbm_mp": 1.8907,
+  "efermi_mp": 2.01591215,
+  "has_band_edges_mp": true
+}
